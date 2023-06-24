@@ -99,6 +99,7 @@ def main():
         )
     else:
         parser.update_params_file(args)
+        print ('done')
         main_worker(args.gpu, -1, args)
 
 
@@ -140,6 +141,7 @@ def main_worker(gpu, ngpus, args):
         model.load_state_dict(ckpt['state_dict'])
 
     # Data loading code
+    print ('data loading time')
     model.prepare_data()
     train_loader, val_loader = model.dataloaders(iters=args.iters)
 
@@ -161,7 +163,7 @@ def main_worker(gpu, ngpus, args):
         model.train()
 
         start_time = time.time()
-        for _, batch in enumerate(train_loader):
+        for batch in enumerate(train_loader):
             cur_iter += 1
 
             batch = [x.to(device) for x in batch]

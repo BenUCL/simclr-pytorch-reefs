@@ -17,7 +17,7 @@ from utils.lars_optimizer import LARS
 import scipy
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
-
+from my_custom_dataset import CTDataset
 import copy
 
 class BaseSSL(nn.Module):
@@ -79,6 +79,10 @@ class BaseSSL(nn.Module):
             valdir = os.path.join(self.IMAGENET_PATH, 'val')
             self.trainset = datasets.ImageFolder(traindir, transform=train_transform)
             self.testset = datasets.ImageFolder(valdir, transform=test_transform)
+        elif self.hparams.data == 'ROV':
+            cfg = {'data_root':'../all_ROV_crops', 'train_label_file':'../10_percent_labels.csv', 'val_label_file':'../5_percent_labels.csv', 'test_label_file':'../10_percent_test_labels.csv', 'unlabeled':'../75_percent_unlabeled_with_unknown.csv'}
+            self.trainset = CTDataset(cfg, split='unlabeled', transform=train_transform)
+            self.testset = CTDataset(cfg, split='val', transform=test_transform)
         else:
             raise NotImplementedError
 
@@ -249,7 +253,7 @@ class SimCLR(BaseSSL):
             ])
             test_transform = train_transform
 
-        elif self.hparams.data == 'imagenet':
+        elif self.hparams.data == 'imagenet' or self.hparams.data == 'ROV':
             from utils.datautils import GaussianBlur
 
             im_size = 224
@@ -266,6 +270,7 @@ class SimCLR(BaseSSL):
                 datautils.Clip(),
             ])
             test_transform = train_transform
+
         return train_transform, test_transform
 
     def get_ckpt(self):
