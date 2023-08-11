@@ -17,7 +17,7 @@ from utils.lars_optimizer import LARS
 import scipy
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
-from my_custom_dataset import CTDataset
+from models.my_custom_dataset import CTDataset
 import copy
 
 class BaseSSL(nn.Module):
@@ -80,8 +80,11 @@ class BaseSSL(nn.Module):
             self.trainset = datasets.ImageFolder(traindir, transform=train_transform)
             self.testset = datasets.ImageFolder(valdir, transform=test_transform)
         elif self.hparams.data == 'ROV':
-            cfg = {'data_root':'../all_ROV_crops', 'train_label_file':'../10_percent_labels.csv', 'val_label_file':'../5_percent_labels.csv', 'test_label_file':'../10_percent_test_labels.csv', 'unlabeled':'../75_percent_unlabeled_with_unknown.csv'}
+            cfg = {'data_root':'/root/all_ROV_crops_with_unknown/all_ROV_crops_with_unknown', 'train_label_file':'../10_percent_train_with_unknown.csv', 'val_label_file':'../5_percent_val_with_unknown.csv', 'test_label_file':'../10_percent_test_with_unknown.csv', 'unlabeled_file':'../75_percent_unlabeled_with_unknown.csv'}
+            #### tarun : for pretraining self.trainset is the unlabeled dataset.
             self.trainset = CTDataset(cfg, split='unlabeled', transform=train_transform)
+            #### tarun : for eval or finetuning,self.trainset is the 10percent train dataset
+            #self.trainset = CTDataset(cfg, split='train', transform=train_transform)
             self.testset = CTDataset(cfg, split='val', transform=test_transform)
         else:
             raise NotImplementedError
@@ -187,7 +190,7 @@ class SimCLR(BaseSSL):
                 linear_normal_init(m.weight)
 
     def step(self, batch):
-        x, _ = batch
+        x = batch
         z = self.model(x)
         loss, acc = self.criterion(z)
         return {
@@ -331,8 +334,13 @@ class SSLEval(BaseSSL):
         elif hparams.data == 'imagenet':
             hdim = self.encode(torch.ones(10, 3, 224, 224).to(device)).shape[1]
             n_classes = 1000
+        elif hparams.data == 'ROV':
+            ### we are just sending something to get the hdim (representation) size from the model (i.e throwing away the projection layer)
+            hdim = self.encode(torch.ones(10, 3, 224, 224).to(device)).shape[1]
+            n_classes = 51
 
         if hparams.arch == 'linear':
+            ### the model we are training is just this small one layer linear model going from representation-->class
             model = nn.Linear(hdim, n_classes).to(device)
             model.weight.data.zero_()
             model.bias.data.zero_()
@@ -347,11 +355,12 @@ class SSLEval(BaseSSL):
         return self.encoder.model(x, out='h')
 
     def step(self, batch):
-        if self.hparams.problem == 'eval' and self.hparams.data == 'imagenet':
+        if self.hparams.problem == 'eval' and self.hparams.data in ['ROV','imagenet']:
             batch[0] = batch[0] / 255.
         h, y = batch
         if self.hparams.precompute_emb_bs == -1:
             h = self.encode(h)
+        #### our model is only a linear layer, hence we convert image to representation vector first and then use that to feed into our model (linear layer) to get class
         p = self.model(h)
         loss = F.cross_entropy(p, y)
         acc = (p.argmax(1) == y).float()
@@ -393,8 +402,9 @@ class SSLEval(BaseSSL):
                 shuffle=False,
             )
             for x, y in tqdm(loader):
-                if self.hparams.data == 'imagenet':
+                if self.hparams.data == 'imagenet' or self.hparams.data == 'ROV':
                     x = x.to(torch.device('cuda'))
+                    ### tarun: not sure i have to do this for the ROV data
                     x = x / 255.
                 e = self.encode(x)
                 embs.append(utils.tonp(e))
@@ -469,7 +479,7 @@ class SSLEval(BaseSSL):
             test_transform = transforms.Compose([
                 transforms.ToTensor(),
             ])
-        elif self.hparams.data == 'imagenet':
+        elif self.hparams.data == 'imagenet' or self.hparams.data== 'ROV':
             train_transform = transforms.Compose([
                 transforms.RandomResizedCrop(
                     224,

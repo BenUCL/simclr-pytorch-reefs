@@ -19,9 +19,7 @@ from torchvision.transforms import Compose, Resize, ToTensor
 from PIL import Image
 import csv
 from torchvision.transforms import transforms
-from data_aug.gaussian_blur import GaussianBlur
 from torchvision import transforms, datasets
-from data_aug.view_generator import ContrastiveLearningViewGenerator
 
 
 
@@ -32,6 +30,8 @@ class CTDataset(Dataset):
             Constructor. Here, we collect and index the dataset inputs and
             labels.
         '''
+        if split == 'unlabeled':
+            print ('################################# this will not work unless you change the getitem function in models/my_custom_dataset.py to have no labels for val set############') 
         self.data_root = cfg['data_root']
         self.split = split
         self.transform = transform
@@ -46,17 +46,25 @@ class CTDataset(Dataset):
         self.label_mapping = {}
         global_mapping_idx = 0
 
-        # if split == 'train':
-        #     f = open(cfg['train_label_file'], 'r')
-        if split=='val':
+        if split == 'train':
+            f = open(cfg['train_label_file'], 'r')
+            
+        elif split=='val':
             f = open(cfg['val_label_file'], 'r')
-        # elif split=='test':
-        #     f = open(cfg['test_label_file'], 'r')
+        elif split=='test':
+            f = open(cfg['test_label_file'], 'r')
         elif split=='unlabeled':
-            f = open(cfg['unlabeled'], 'r')
+            f = open(cfg['unlabeled_file'],'r')
+        
         csv_reader = csv.reader(f, delimiter=',')
-        for row in csv_reader:
-            self.data.append([row[0]])
+        
+        #if split == 'unlabeled':
+        if split == 'unlabeled' or split == 'val':
+            for row in csv_reader:
+                self.data.append(row[0])
+        else:
+            for row in csv_reader:
+                self.data.append([row[0], int(row[1])])
 
     def __len__(self):
         '''
@@ -70,13 +78,25 @@ class CTDataset(Dataset):
             Returns a single data point at given idx.
             Here's where we actually load the image.
         '''
-        image_name = self.data[idx][0]              # see line 57 above where we added these two items to the self.data list
+        if self.split == 'unlabeled' or self.split=='val':
+                image_name = self.data[idx]              # see line 57 above where we added these two items to the self.data list
 
-        # load image
-        image_path = os.path.join(self.data_root, image_name)
-        img = Image.open(image_path).convert('RGB')     # the ".convert" makes sure we always get three bands in Red, Green, Blue order
+                # load image
+                image_path = os.path.join(self.data_root, image_name)
+                img = Image.open(image_path).convert('RGB')     # the ".convert" makes sure we always get three bands in Red, Green, Blue order
 
-        # transform: see lines 31ff above where we define our transformations
-        img_tensor = self.transform(img)
+                # transform: see lines 31ff above where we define our transformations
+                img_tensor = self.transform(img)
 
-        return img_tensor
+                return img_tensor
+        else: 
+            image_name,label = self.data[idx][0], self.data[idx][1]              # see line 57 above where we added these two items to the self.data list
+
+            # load image
+            image_path = os.path.join(self.data_root, image_name)
+            img = Image.open(image_path).convert('RGB')     # the ".convert" makes sure we always get three bands in Red, Green, Blue order
+
+            # transform: see lines 31ff above where we define our transformations
+            img_tensor = self.transform(img)
+
+            return img_tensor,label

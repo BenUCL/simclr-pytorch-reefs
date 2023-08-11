@@ -76,6 +76,8 @@ def main():
 
     if args.data == 'imagenet' and args.aug == False:
         raise Exception('ImageNet models should be eval with aug=True!')
+    if args.data == 'ROV' and args.aug == False:
+        raise Exception('ROV models should be eval with aug=True!')
 
     if args.seed != -1:
         random.seed(args.seed)
@@ -163,10 +165,11 @@ def main_worker(gpu, ngpus, args):
         model.train()
 
         start_time = time.time()
-        for batch in enumerate(train_loader):
+        for _,batch in enumerate(train_loader):
             cur_iter += 1
-
-            batch = [x.to(device) for x in batch]
+            #print (f'batch is {batch}')
+            #batch = [x.to(device) for x in batch]
+            batch = batch.to(device)
             data_time += time.time() - start_time
 
             logs = {}
@@ -192,7 +195,8 @@ def main_worker(gpu, ngpus, args):
                 model.eval()
                 with torch.no_grad():
                     for batch in val_loader:
-                        batch = [x.to(device) for x in batch]
+                        #batch = [x.to(device) for x in batch]
+                        batch = batch.to(device)
                         # forward pass
                         logs = model.test_step(batch)
                         # save logs for the batch
