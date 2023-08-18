@@ -1,3 +1,5 @@
+
+
 from argparse import Namespace, ArgumentParser
 
 import os
@@ -17,7 +19,7 @@ from utils.lars_optimizer import LARS
 import scipy
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
-from models.my_custom_dataset import CTDataset
+#from models.my_custom_dataset import CTDataset
 import copy
 
 class BaseSSL(nn.Module):
@@ -68,6 +70,7 @@ class BaseSSL(nn.Module):
         return None, None
 
     def prepare_data(self):
+        self.trainset = dataset
         train_transform, test_transform = self.transforms()
         # print('The following train transform is used:\n', train_transform)
         # print('The following test transform is used:\n', test_transform)
@@ -80,9 +83,13 @@ class BaseSSL(nn.Module):
             self.trainset = datasets.ImageFolder(traindir, transform=train_transform)
             self.testset = datasets.ImageFolder(valdir, transform=test_transform)
         elif self.hparams.data == 'ROV':
-            cfg = {'data_root':'/root/all_ROV_crops_with_unknown/all_ROV_crops_with_unknown', 'train_label_file':'../10_percent_train_with_unknown.csv', 'val_label_file':'../5_percent_val_with_unknown.csv', 'test_label_file':'../10_percent_test_with_unknown.csv', 'unlabeled_file':'../75_percent_unlabeled_with_unknown.csv'}
+             
+            cfg = {'dataset_path': '/home/ben/data/full_dataset/', #############################
+                'json_path': '/home/ben/data/dataset.json'}
+
+            #cfg = {'data_root':'/root/all_ROV_crops_with_unknown/all_ROV_crops_with_unknown', 'train_label_file':'../10_percent_train_with_unknown.csv', 'val_label_file':'../5_percent_val_with_unknown.csv', 'test_label_file':'../10_percent_test_with_unknown.csv', 'unlabeled_file':'../75_percent_unlabeled_with_unknown.csv'}
             #### tarun : for pretraining self.trainset is the unlabeled dataset.
-            self.trainset = CTDataset(cfg, split='unlabeled', transform=train_transform)
+            self.trainset = CTDataset(**cfg)#, split='unlabeled', transform=train_transform)
             #### tarun : for eval or finetuning,self.trainset is the 10percent train dataset
             #self.trainset = CTDataset(cfg, split='train', transform=train_transform)
             self.testset = CTDataset(cfg, split='val', transform=test_transform)
